@@ -43,6 +43,9 @@ if(iridescence_viewer_FOUND)
     message(STATUS "Viewer for examples: IridescenceViewer")
 endif()
 
+set(onnxruntime_INSTALL_PREFIX /stella_vslam/onnxruntime_gpu)
+find_library(onnxruntime_LIBS NAMES onnxruntime PATHS ${onnxruntime_INSTALL_PREFIX}/lib)
+find_library(onnxruntime_LIBS_CUDA NAMES onnxruntime_providers_cuda PATHS ${onnxruntime_INSTALL_PREFIX}/lib)
 # ----- Build example executables -----
 
 set(EXECUTABLE_TARGETS "")
@@ -109,12 +112,17 @@ foreach(EXECUTABLE_TARGET IN LISTS EXECUTABLE_TARGETS)
         target_link_libraries(${EXECUTABLE_TARGET} PRIVATE ${GPERFTOOLS_LIBRARIES})
     endif()
 
+    target_link_libraries(${EXECUTABLE_TARGET} PRIVATE ${onnxruntime_LIB} ${onnxruntime_LIB_CUDA})
+
     # Link stella_vslam
     target_link_libraries(${EXECUTABLE_TARGET}
                           PRIVATE
+                          ${onnxruntime_LIB}
+                          ${onnxruntime_LIB_CUDA}
                           stella_vslam::stella_vslam
                           opencv_imgcodecs
                           opencv_videoio)
+    set_target_properties(${EXECUTABLE_TARGET} PROPERTIES INSTALL_RPATH ${onnxruntime_INSTALL_PREFIX}/lib)
 
     # include 3rd party library headers
     target_include_directories(${EXECUTABLE_TARGET}
