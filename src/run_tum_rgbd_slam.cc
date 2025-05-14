@@ -39,6 +39,22 @@ namespace fs = ghc::filesystem;
 #include <gperftools/profiler.h>
 #endif
 
+bool create_directories(std::string dir_path) {
+    try {
+        if (!fs::exists(dir_path)) {
+            bool created = fs::create_directories(dir_path);
+            if (created) {
+                std::cout << "Created directory: " << dir_path << std::endl;
+            }
+            return created;
+        }
+        return true;  // Директория уже существует
+    } catch (const fs::filesystem_error& e) {
+        std::cerr << "Error creating directory: " << e.what() << std::endl;
+        return false;
+    }
+}
+
 int mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
                   const std::shared_ptr<stella_vslam::config>& cfg,
                   const std::string& sequence_dir_path,
@@ -448,24 +464,46 @@ int rgbd_tracking(const std::shared_ptr<stella_vslam::system>& slam,
     // shutdown the slam process
     slam->shutdown();
 
-    if (!eval_log_dir.empty()) {
-        // output the trajectories for evaluation
-        slam->save_frame_trajectory(eval_log_dir + "/frame_trajectory.txt", "TUM");
-        slam->save_keyframe_trajectory(eval_log_dir + "/keyframe_trajectory.txt", "TUM");
-        // output the tracking times for evaluation
-        std::ofstream ofs(eval_log_dir + "/track_times.txt", std::ios::out);
-        if (ofs.is_open()) {
-            for (const auto track_time : track_times) {
-                ofs << track_time << std::endl;
-            }
-            ofs.close();
-        }
-    }
-
     std::sort(track_times.begin(), track_times.end());
     const auto total_track_time = std::accumulate(track_times.begin(), track_times.end(), 0.0);
-    std::cout << "median tracking time: " << track_times.at(track_times.size() / 2) << "[s]" << std::endl;
-    std::cout << "mean tracking time: " << total_track_time / track_times.size() << "[s]" << std::endl;
+    const auto median_tracking_time = track_times.at(track_times.size() / 2);
+    const auto mean_tracking_time = total_track_time / track_times.size();
+    const auto median_tracking_time_str = "median tracking time: " + std::to_string(median_tracking_time) + "[s]";
+    const auto mean_tracking_time_str = "mean tracking time: " + std::to_string(mean_tracking_time) + "[s]";
+    
+    std::cout << median_tracking_time_str << std::endl;
+    std::cout << mean_tracking_time_str << std::endl;
+
+    bool is_created = !eval_log_dir.empty() ? create_directories(eval_log_dir) : false;
+    std::cout << "is_created: " << is_created << std::endl;
+
+    if (is_created) {
+        auto tracking_time_path = eval_log_dir + "/tracking_time.txt";
+        auto frame_trajectory_path = eval_log_dir + "/frame_trajectory.txt";
+        auto keyframe_trajectory_path = eval_log_dir + "/keyframe_trajectory.txt";
+        auto track_times_path = eval_log_dir + "/track_times.txt";
+        
+
+        std::ofstream ofs0(tracking_time_path, std::ios::out | std::ios::app);
+        if (ofs0.is_open()) {
+            ofs0 << median_tracking_time_str << std::endl;
+            ofs0 << mean_tracking_time_str << std::endl;
+            ofs0.close();
+        }
+
+        // output the trajectories for evaluation
+        slam->save_frame_trajectory(frame_trajectory_path, "TUM");
+        slam->save_keyframe_trajectory(keyframe_trajectory_path, "TUM");
+
+        // output the tracking times for evaluation
+        std::ofstream ofs1(track_times_path, std::ios::out);
+        if (ofs1.is_open()) {
+            for (const auto track_time : track_times) {
+                ofs1 << track_time << std::endl;
+            }
+            ofs1.close();
+        }
+    }
 
     if (!map_db_path.empty()) {
         if (!slam->save_map_database(map_db_path)) {
